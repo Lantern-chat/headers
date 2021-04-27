@@ -25,7 +25,10 @@ bytes = "1"
 itertools = "0.10"
 mime = "0.3.14"
 sha-1 = "0.9"
-time = "0.2"
+httpdate = "1"
+
+[dev-dependencies]
+time = "0.1.0"
 
 [features]
 nightly = []

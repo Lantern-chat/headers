@@ -78,12 +78,12 @@ extern crate bitflags;
 extern crate bytes;
 extern crate headers_core;
 extern crate http;
+extern crate httpdate;
 extern crate itertools;
 extern crate mime;
 extern crate sha1;
 #[cfg(all(test, feature = "nightly"))]
 extern crate test;
-extern crate time;
 
 pub use headers_core::{Error, Header};
 
