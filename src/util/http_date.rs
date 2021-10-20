@@ -1,5 +1,4 @@
 use std::fmt;
-use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use std::time::SystemTime;
 
@@ -32,20 +31,8 @@ use super::IterExt;
 //   header field that contains one or more timestamps defined as
 //   HTTP-date, the sender MUST generate those timestamps in the
 //   IMF-fixdate format.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct HttpDate(httpdate::HttpDate);
-
-impl Hash for HttpDate {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: Hasher,
-    {
-        // This matches the PartialEq and Ord impls of httpdate::HttpDate, but
-        // can be removed when this is merged:
-        // https://github.com/pyfisch/httpdate/pull/5
-        SystemTime::from(self.0).hash(state)
-    }
-}
 
 impl HttpDate {
     pub(crate) fn from_val(val: &HeaderValue) -> Option<Self> {
@@ -117,49 +104,23 @@ impl From<HttpDate> for SystemTime {
 
 #[cfg(test)]
 mod tests {
-    extern crate time;
-
-    use self::time::Tm;
     use super::HttpDate;
 
     use std::time::{Duration, UNIX_EPOCH};
 
+    // The old tests had Sunday, but 1994-11-07 is a Monday.
+    // See https://github.com/pyfisch/httpdate/pull/6#issuecomment-846881001
     fn nov_07() -> HttpDate {
-        HttpDate(
-            (UNIX_EPOCH
-                + Duration::from_secs(
-                    Tm {
-                        tm_nsec: 0,
-                        tm_sec: 37,
-                        tm_min: 48,
-                        tm_hour: 8,
-                        tm_mday: 7,
-                        tm_mon: 10,
-                        tm_year: 94,
-                        tm_wday: 0,
-                        tm_isdst: 0,
-                        tm_yday: 0,
-                        tm_utcoff: 0,
-                    }
-                    .to_timespec()
-                    .sec as u64,
-                ))
-            .into(),
-        )
+        HttpDate((UNIX_EPOCH + Duration::new(784198117, 0)).into())
     }
 
     #[test]
     fn test_display_is_imf_fixdate() {
-        // it's actually a Monday
         assert_eq!("Mon, 07 Nov 1994 08:48:37 GMT", &nov_07().to_string());
     }
 
     #[test]
     fn test_imf_fixdate() {
-        assert_eq!(
-            "Sun, 07 Nov 1994 08:48:37 GMT".parse::<HttpDate>().unwrap(),
-            nov_07()
-        );
         assert_eq!(
             "Mon, 07 Nov 1994 08:48:37 GMT".parse::<HttpDate>().unwrap(),
             nov_07()
@@ -169,19 +130,14 @@ mod tests {
     #[test]
     fn test_rfc_850() {
         assert_eq!(
-            "Sunday, 07-Nov-94 08:48:37 GMT"
-                .parse::<HttpDate>()
-                .unwrap(),
+            "Monday, 07-Nov-94 08:48:37 GMT".parse::<HttpDate>().unwrap(),
             nov_07()
         );
     }
 
     #[test]
     fn test_asctime() {
-        assert_eq!(
-            "Sun Nov  7 08:48:37 1994".parse::<HttpDate>().unwrap(),
-            nov_07()
-        );
+        assert_eq!("Mon Nov  7 08:48:37 1994".parse::<HttpDate>().unwrap(), nov_07());
     }
 
     #[test]
