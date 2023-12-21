@@ -1,6 +1,6 @@
 [package]
 name = "headers"
-version = "0.3.8" # don't forget to update html_root_url
+version = "0.4.0"                                   # don't forget to update html_root_url
 description = "typed HTTP headers"
 license = "MIT"
 readme = "README.md"
@@ -9,6 +9,7 @@ repository = "https://github.com/hyperium/headers"
 authors = ["Sean McArthur <sean@seanmonstar.com>"]
 keywords = ["http", "headers", "hyper", "hyperium"]
 categories = ["web-programming"]
+rust-version = "1.56"
 
 # [workspace]
 # members = [
@@ -17,12 +18,12 @@ categories = ["web-programming"]
 # ]
 
 [dependencies]
-http = "0.2.0"
-headers-core = { version = "0.2", path = "./headers-core" }
-base64 = "0.21"
 bitflags = "1.0"
+http = "1.0.0"
+headers-core = { version = "0.3", path = "./headers-core" }
+base64 = "0.21.3"
 bytes = "1"
-itertools = "0.10"
+itertools = "0.12"
 mime = "0.3.14"
 sha1 = "0.10"
 httpdate = "1"

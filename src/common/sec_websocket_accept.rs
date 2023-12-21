@@ -1,3 +1,5 @@
+use base64::engine::general_purpose::STANDARD as ENGINE;
+use base64::Engine;
 use bytes::Bytes;
 use sha1::{Digest, Sha1};
 
@@ -34,13 +36,11 @@ impl From<SecWebsocketKey> for SecWebsocketAccept {
     }
 }
 
-use base64::engine::{Engine, general_purpose::STANDARD};
-
 fn sign(key: &[u8]) -> SecWebsocketAccept {
     let mut sha1 = Sha1::default();
     sha1.update(key);
     sha1.update(&b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"[..]);
-    let b64 = Bytes::from(STANDARD.encode(sha1.finalize()));
+    let b64 = Bytes::from(ENGINE.encode(&sha1.finalize()));
 
     let val = ::HeaderValue::from_maybe_shared(b64).expect("base64 is a valid value");
 
@@ -59,9 +59,6 @@ mod tests {
         let accept = SecWebsocketAccept::from(key);
         let headers = test_encode(accept);
 
-        assert_eq!(
-            headers["sec-websocket-accept"],
-            "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
-        );
+        assert_eq!(headers["sec-websocket-accept"], "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
     }
 }

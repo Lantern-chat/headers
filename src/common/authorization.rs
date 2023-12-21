@@ -1,5 +1,7 @@
 //! Authorization header and types.
 
+use base64::engine::general_purpose::STANDARD as ENGINE;
+use base64::Engine;
 use bytes::Bytes;
 
 use util::HeaderValueString;
@@ -80,9 +82,9 @@ impl<C: Credentials> ::Header for Authorization<C> {
             .next()
             .and_then(|val| {
                 let slice = val.as_bytes();
-                if slice.starts_with(C::SCHEME.as_bytes())
-                    && slice.len() > C::SCHEME.len()
+                if slice.len() > C::SCHEME.len()
                     && slice[C::SCHEME.len()] == b' '
+                    && slice[..C::SCHEME.len()].eq_ignore_ascii_case(C::SCHEME.as_bytes())
                 {
                     C::decode(val).map(Authorization)
                 } else {
@@ -144,14 +146,12 @@ impl Basic {
     }
 }
 
-use base64::engine::{Engine, general_purpose::STANDARD};
-
 impl Credentials for Basic {
     const SCHEME: &'static str = "Basic";
 
     fn decode(value: &HeaderValue) -> Option<Self> {
         debug_assert!(
-            value.as_bytes().starts_with(b"Basic "),
+            value.as_bytes()[..Self::SCHEME.len()].eq_ignore_ascii_case(Self::SCHEME.as_bytes()),
             "HeaderValue to decode should start with \"Basic ..\", received = {:?}",
             value,
         );
@@ -159,7 +159,8 @@ impl Credentials for Basic {
         let bytes = &value.as_bytes()["Basic ".len()..];
         let non_space_pos = bytes.iter().position(|b| *b != b' ')?;
         let bytes = &bytes[non_space_pos..];
-        let bytes = STANDARD.decode(bytes).ok()?;
+
+        let bytes = ENGINE.decode(bytes).ok()?;
 
         let decoded = String::from_utf8(bytes).ok()?;
 
@@ -170,12 +171,10 @@ impl Credentials for Basic {
 
     fn encode(&self) -> HeaderValue {
         let mut encoded = String::from("Basic ");
-
-        STANDARD.encode_string(&self.decoded, &mut encoded);
+        ENGINE.encode_string(&self.decoded, &mut encoded);
 
         let bytes = Bytes::from(encoded);
-        HeaderValue::from_maybe_shared(bytes)
-            .expect("base64 encoding is always a valid HeaderValue")
+        HeaderValue::from_maybe_shared(bytes).expect("base64 encoding is always a valid HeaderValue")
     }
 }
 
@@ -186,7 +185,7 @@ pub struct Bearer(HeaderValueString);
 impl Bearer {
     /// View the token part as a `&str`.
     pub fn token(&self) -> &str {
-        &self.0.as_str()["Bearer ".len()..]
+        self.0.as_str()["Bearer ".len()..].trim_start()
     }
 }
 
@@ -195,7 +194,7 @@ impl Credentials for Bearer {
 
     fn decode(value: &HeaderValue) -> Option<Self> {
         debug_assert!(
-            value.as_bytes().starts_with(b"Bearer "),
+            value.as_bytes()[..Self::SCHEME.len()].eq_ignore_ascii_case(Self::SCHEME.as_bytes()),
             "HeaderValue to decode should start with \"Bearer ..\", received = {:?}",
             value,
         );
@@ -222,10 +221,7 @@ mod tests {
         let auth = Authorization::basic("Aladdin", "open sesame");
         let headers = test_encode(auth);
 
-        assert_eq!(
-            headers["authorization"],
-            "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==",
-        );
+        assert_eq!(headers["authorization"], "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==",);
     }
 
     #[test]
@@ -246,8 +242,35 @@ mod tests {
 
     #[test]
     fn basic_decode() {
-        let auth: Authorization<Basic> =
-            test_decode(&["Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="]).unwrap();
+        let auth: Authorization<Basic> = test_decode(&["Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="]).unwrap();
+        assert_eq!(auth.0.username(), "Aladdin");
+        assert_eq!(auth.0.password(), "open sesame");
+    }
+
+    #[test]
+    fn basic_decode_case_insensitive() {
+        let auth: Authorization<Basic> = test_decode(&["basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="]).unwrap();
+        assert_eq!(auth.0.username(), "Aladdin");
+        assert_eq!(auth.0.password(), "open sesame");
+    }
+
+    #[test]
+    fn basic_decode_extra_whitespaces() {
+        let auth: Authorization<Basic> = test_decode(&["Basic  QWxhZGRpbjpvcGVuIHNlc2FtZQ=="]).unwrap();
+        assert_eq!(auth.0.username(), "Aladdin");
+        assert_eq!(auth.0.password(), "open sesame");
+    }
+
+    #[test]
+    fn basic_decode_case_insensitive() {
+        let auth: Authorization<Basic> = test_decode(&["basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="]).unwrap();
+        assert_eq!(auth.0.username(), "Aladdin");
+        assert_eq!(auth.0.password(), "open sesame");
+    }
+
+    #[test]
+    fn basic_decode_extra_whitespaces() {
+        let auth: Authorization<Basic> = test_decode(&["Basic  QWxhZGRpbjpvcGVuIHNlc2FtZQ=="]).unwrap();
         assert_eq!(auth.0.username(), "Aladdin");
         assert_eq!(auth.0.password(), "open sesame");
     }
@@ -271,6 +294,18 @@ mod tests {
     #[test]
     fn bearer_decode() {
         let auth: Authorization<Bearer> = test_decode(&["Bearer fpKL54jvWmEGVoRdCNjG"]).unwrap();
+        assert_eq!(auth.0.token().as_bytes(), b"fpKL54jvWmEGVoRdCNjG");
+    }
+
+    #[test]
+    fn bearer_decode_case_insensitive() {
+        let auth: Authorization<Bearer> = test_decode(&["bearer fpKL54jvWmEGVoRdCNjG"]).unwrap();
+        assert_eq!(auth.0.token().as_bytes(), b"fpKL54jvWmEGVoRdCNjG");
+    }
+
+    #[test]
+    fn bearer_decode_extra_whitespaces() {
+        let auth: Authorization<Bearer> = test_decode(&["Bearer   fpKL54jvWmEGVoRdCNjG"]).unwrap();
         assert_eq!(auth.0.token().as_bytes(), b"fpKL54jvWmEGVoRdCNjG");
     }
 }
